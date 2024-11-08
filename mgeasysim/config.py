@@ -1,6 +1,7 @@
 import os
 import yaml
 from datetime import datetime
+import glob
 
 class Config:
     def __init__(self):
@@ -30,6 +31,7 @@ class Config:
             yaml.dump(self._config_data, file)
         
     def get(self, section, option, default=None):
+        print(self._config_data.get(section, {}).get(option, default))
         return self._config_data.get(section, {}).get(option, default)
     
     def set(self, section, option, value):
@@ -43,3 +45,12 @@ class Config:
     
 # Singleton pattern to ensure one instance of Config across the app
 config = Config()
+print(config._config_data)
+
+GTDB_BASE = config.get('database', 'gtdb_loc')
+
+print(GTDB_BASE)
+if GTDB_BASE is not None:
+    print(glob.glob(f'{GTDB_BASE}/*metadata*.tsv'))
+    GTDB_MD = glob.glob(f'{GTDB_BASE}/*metadata*.tsv')[0]
+    OUTPUT = config.get('locations', 'output')

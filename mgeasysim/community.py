@@ -2,10 +2,17 @@ import warnings
 from mgeasysim.config import config
 import pandas as pd
 from rapidfuzz import process, fuzz
+import glob
 
 GTDB_BASE = config.get('database', 'path')
-GTDB_MD = glob.glob(f'{GTDB_BASE}*metadata*.tsv')[0]
-OUTPUT = config.get('locations', 'output')
+if GTDB_BASE is not None:
+    global GTDB_MD
+    global OUTPUT
+
+    GTDB_MD = glob.glob(f'{GTDB_BASE}*metadata*.tsv')[0]
+    OUTPUT = config.get('locations', 'output')
+
+
 
 # Function to find top match from slist for each item in qlist
 def find_top_matches(qlist, slist):
