@@ -31,7 +31,6 @@ class Config:
             yaml.dump(self._config_data, file)
         
     def get(self, section, option, default=None):
-        print(self._config_data.get(section, {}).get(option, default))
         return self._config_data.get(section, {}).get(option, default)
     
     def set(self, section, option, value):
@@ -49,8 +48,6 @@ print(config._config_data)
 
 GTDB_BASE = config.get('database', 'gtdb_loc')
 
-print(GTDB_BASE)
 if GTDB_BASE is not None:
-    print(glob.glob(f'{GTDB_BASE}/*metadata*.tsv'))
-    GTDB_MD = glob.glob(f'{GTDB_BASE}/*metadata*.tsv')[0]
+    GTDB_MD = glob.glob(f'{GTDB_BASE}/*metadata*.tsv*')[0]
     OUTPUT = config.get('locations', 'output')
