@@ -6,8 +6,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from mgeasysim.config import config
-config._clear()
+from mgeasysim import config as cf
 from mgeasysim import community, simulate
 
 def main():
@@ -48,25 +47,27 @@ def main():
     args = parser.parse_args()
     
     if args.command == 'config':
-        config._clear()
-        os.makedirs(os.path.abspath(args.output), exist_ok=True)
-        config.set('database', 'gtdb_loc', os.path.abspath(args.gtdb))
-        config.set('locations', 'output', os.path.abspath(args.output))
-        config.set('runtime', 'threads', args.threads)
+        cf.config._clear()
+        cf.config.set('database', 'gtdb_loc', os.path.abspath(args.gtdb))
+        cf.config.set('locations', 'output', os.path.abspath(args.output))
+        cf.config.set('runtime', 'threads', args.threads)
 
     elif args.command == "community":
-
-        matches = matches.get_matching_gtdb(args.taxlist)
+        
+        os.makedirs(os.path.abspath(cf.OUTPUT), exist_ok=True)
+        matches = community.get_matching_gtdb(args.taxlist)
         genbanks = list(matches['top_match_genbank'].dropna().unique()) + list(matches['alt_genbank'].dropna().unique())
-        download_genomes(genbanks, jupyter=args.jupyter)
-        rename_files(genbanks)
-        matches = add_mashdist(matches)
-        simdata = generate_simulations(matches, 
+        community.download_genomes(genbanks, jupyter=args.jupyter)
+        community.rename_files(genbanks)
+        matches = community.add_mashdist(matches)
+        simdata = community.generate_simulations(matches, 
                                        n_sims=args.n_sims, 
-                                       n_species=args.species, 
-                                       power_a=args.a, 
-                                       n_strains=args.strains
+                                       n_species=args.n_species, 
+                                       power_a=args.power_a, 
+                                       n_strains=args.n_strains
                                        )
+        simdata.to_csv(os.path.join(cf.OUTPUT, 'simulation_data.tsv.gz'), sep='\t')
+    
     elif args.command == "simulate":
         simulate.run(args.arg1, args.arg2)
 

@@ -80,7 +80,7 @@ def download_genomes(genbanks, jupyter=False):
                os.path.join(cf.OUTPUT, 'genbanklist.txt'),
                 '--filename', os.path.join(cf.OUTPUT, 'genomes_dataset.zip')]
     
-    command2 = ['unzip',
+    command2 = ['unzip', '-o',
                 os.path.join(cf.OUTPUT, 'genomes_dataset.zip'),
                 '-d',
                 os.path.join(cf.OUTPUT, '')]
@@ -88,20 +88,23 @@ def download_genomes(genbanks, jupyter=False):
     command1 = ' '.join(command1)
     print('Running:')
     print(command1)
-    p1 = subprocess.run(command1.split(' '), 
+    subprocess.run(command1.split(' '), 
                         capture_output = jupyter,
                         shell = False)
     # p1.wait()
     print('Running:')
     print(' '.join(command2))
     
-    p2 = subprocess.run(command2, 
+    subprocess.run(command2, 
                          capture_output = jupyter,
                          shell = False)
     # p2.wait()
 
 
 def rename_files(genbanks):
+    """
+    Function to rename files downloaded from NCBI, which have long filenames
+    """
     genome2file = get_genome2file()
 
     # create copies of files for multithreading read simulation
@@ -111,6 +114,14 @@ def rename_files(genbanks):
         p = subprocess.run(['cp', s, new_filename], capture_output=True, text=True)
 
 def add_mashdist(matches):
+    """
+    Function to add a column with ANI between each genome
+    and its alternate strain genome use MASH
+    matches: the matching dataframe
+    returns:
+    matches with additional column alt_mashdist
+    """
+
     matches['alt_mashdist'] = 'none'
 
     for index, row in tqdm(matches.dropna().iterrows()):
@@ -195,7 +206,7 @@ def generate_simulations(matches, n_sims, n_species, power_a, n_strains):
 def get_genome2file():
     # save distribution of genome files
     genome2file = pd.Series()
-    genome_folders = glob.glob(os.path.join(cf.OUTPUT, 'ncbi_dataset/data/*/*.fna'))
+    genome_folders = glob.glob(os.path.join(cf.OUTPUT, 'ncbi_dataset/data/*/*_genomic.fna'))
     for g_file in genome_folders:
         genome = g_file.split('/')[-2]
         genome2file.loc[genome] = g_file
@@ -216,7 +227,7 @@ def get_genome_lengths():
                 total_length = np.sum([len(r.seq) for r in SeqIO.parse(handle, 'fasta')])
             genome_lengths.loc[gtdb_acc] = total_length
 
-    return genome_lengths
+    return genome_lengths, acc2genbank
 
 
 
