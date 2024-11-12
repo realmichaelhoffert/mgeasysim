@@ -5,6 +5,7 @@ import os
 # Add the package's root directory to the sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import pandas as pd
 
 from mgeasysim import config as cf
 from mgeasysim import community, simulate
@@ -41,8 +42,7 @@ def main():
     # Simulate subcommand
     simulate_parser = subparsers.add_parser("simulate", help="Run a genome simulation")
     
-    simulate_parser.add_argument("--arg1", type=str, help="First argument for genome simulation")
-    simulate_parser.add_argument("--arg2", type=int, help="Second argument for genome simulation")
+    simulate_parser.add_argument("--n_reads", '-n', type=int, help="Number of reads per simulation")
 
     args = parser.parse_args()
     
@@ -57,19 +57,44 @@ def main():
         os.makedirs(os.path.abspath(cf.OUTPUT), exist_ok=True)
         matches = community.get_matching_gtdb(args.taxlist)
         genbanks = list(matches['top_match_genbank'].dropna().unique()) + list(matches['alt_genbank'].dropna().unique())
-        community.download_genomes(genbanks, jupyter=args.jupyter)
+        community.download_genomes(genbanks)
         community.rename_files(genbanks)
         matches = community.add_mashdist(matches)
+
+        cf.config.set('locations', 'matches_path', os.path.join(cf.OUTPUT, 'matches.tsv.gz'))
+        matches.to_csv(os.path.join(cf.OUTPUT, 'matches.tsv.gz'), sep='\t', compression='gzip')
+
+        cf.config.set('parameters', 'n_sims', args.n_sims)
+        cf.config.set('parameters', 'n_species', args.n_species)
+        cf.config.set('parameters', 'power_a', args.power_a)
+        cf.config.set('parameters', 'n_strains', args.n_strains)
+
         simdata = community.generate_simulations(matches, 
                                        n_sims=args.n_sims, 
                                        n_species=args.n_species, 
                                        power_a=args.power_a, 
                                        n_strains=args.n_strains
                                        )
+        
         simdata.to_csv(os.path.join(cf.OUTPUT, 'simulation_data.tsv.gz'), sep='\t')
     
     elif args.command == "simulate":
-        simulate.run(args.arg1, args.arg2)
+
+        # load simdata
+        simdata = pd.read_csv(os.path.join(cf.OUTPUT, 'simulation_data.tsv.gz'), sep='\t', index_col=0)
+
+        # get genome lengths and mapping of GTDB accessions to genbanks
+        genome_lengths, acc2genbank = community.get_genome_lengths()
+        # get genome (genbank) to file mapping from output dir
+        genome2file = community.get_genome2file()
+
+        # construct simulated communites
+        simulate.simulate(simdata, 
+                 N_READS=args.n_reads, 
+                 n_threads=cf.config.get('runtime', 'threads'),
+                 acc2genbank=acc2genbank, 
+                 genome_lengths=genome_lengths, 
+                 genome2file=genome2file)
 
 if __name__ == "__main__":
     main()

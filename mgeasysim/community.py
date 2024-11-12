@@ -72,7 +72,7 @@ def get_matching_gtdb(taxfile, search_col='species', verbose=True):
     
     return matches
 
-def download_genomes(genbanks, jupyter=False):
+def download_genomes(genbanks):
     with open(os.path.join(cf.OUTPUT, 'genbanklist.txt'), 'w') as handle:
         handle.write('\n'.join(genbanks))
     
@@ -80,7 +80,7 @@ def download_genomes(genbanks, jupyter=False):
                os.path.join(cf.OUTPUT, 'genbanklist.txt'),
                 '--filename', os.path.join(cf.OUTPUT, 'genomes_dataset.zip')]
     
-    command2 = ['unzip', '-o',
+    command2 = ['unzip', '-q', '-o',
                 os.path.join(cf.OUTPUT, 'genomes_dataset.zip'),
                 '-d',
                 os.path.join(cf.OUTPUT, '')]
@@ -88,17 +88,15 @@ def download_genomes(genbanks, jupyter=False):
     command1 = ' '.join(command1)
     print('Running:')
     print(command1)
-    subprocess.run(command1.split(' '), 
-                        capture_output = jupyter,
-                        shell = False)
-    # p1.wait()
+    p1 = subprocess.Popen(command1.split(' '), 
+                    shell = False,)
+    p1.wait()
     print('Running:')
     print(' '.join(command2))
     
-    subprocess.run(command2, 
-                         capture_output = jupyter,
-                         shell = False)
-    # p2.wait()
+    p2 = subprocess.Popen(command2, 
+                     shell = False)
+    p2.wait()
 
 
 def rename_files(genbanks):
