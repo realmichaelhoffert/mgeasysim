@@ -35,8 +35,14 @@ def get_matching_gtdb(taxfile, search_col='species', verbose=True):
     verboseprint(verbose, 'Loading GTDB md...')
     gtdb_md = pd.read_csv(cf.GTDB_MD, sep='\t', index_col='accession')
     rep2genomes = gtdb_md.groupby('gtdb_genome_representative').apply(lambda x: list(x.index.unique()))
+    
     # only consider representative genomes
     acc2genbank = gtdb_md['ncbi_genbank_assembly_accession']
+
+    # get and save taxon counts
+    taxon_count = gtdb_md.groupby('gtdb_taxonomy').count()['ambiguous_bases']
+    gtdb_md['gtdb_taxonomy'].map(taxon_count).to_pickle(os.path.join(cf.OUTPUT, 'cluster_sizes.pkl'))
+
     gtdb_md = gtdb_md[gtdb_md.gtdb_representative.eq('t')]
     
 
@@ -121,7 +127,7 @@ def add_mashdist(matches):
     """
 
     matches['alt_mashdist'] = 'none'
-
+    print('Adding mashdists to matches file')
     for index, row in tqdm(matches.dropna().iterrows()):
         file1 = os.path.join(cf.OUTPUT, 
                             'ncbi_dataset/data', 
@@ -177,8 +183,15 @@ def generate_simulations(matches, n_sims, n_species, power_a, n_strains):
         # column to indicate which strains have duplicates
         simulation['strain_present'] = 0
 
-        # sample five species
-        alts = simulation.sample(n_strains, replace=False)
+        taxon_counts = pd.read_pickle(os.path.join(cf.OUTPUT, 'cluster_sizes.pkl'))
+        simulation['n_genomes'] = taxon_counts.reindex(simulation.index)
+
+        # only get strains from GTDB genomes with more than 1 genome in the cluster 
+        strains_possible = simulation[simulation['n_genomes'] > 1]
+        
+        # if there's only 1 thing with a genome in the cluster, only 1 strain is possible
+        alts = strains_possible.sample(np.min([n_strains, len(strains_possible)]), replace=False)
+
         # make data
         alt_data = pd.DataFrame(index=[matches[matches.top_match_accession.eq(i)]['top_match_alt'].values[0] for i in alts.index], 
                                 columns=['abun', 'strain_present'])

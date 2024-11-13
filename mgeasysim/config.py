@@ -1,7 +1,7 @@
 import os
 import yaml
-from datetime import datetime
 import glob
+from pprint import pprint
 
 class Config:
     def __init__(self):
@@ -44,7 +44,8 @@ class Config:
     
 # Singleton pattern to ensure one instance of Config across the app
 config = Config()
-print(config._config_data)
+print('Using config:')
+pprint(config._config_data)
 
 GTDB_BASE = config.get('database', 'gtdb_loc')
 

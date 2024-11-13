@@ -36,13 +36,12 @@ def main():
                                   help='Power distribuion A parameter')
     community_parser.add_argument('--n_strains', '-x', default=2, type=int,
                                   help='Number of same-species strains to include in simulation')
-    community_parser.add_argument('--jupyter', '-j', default=False, type=bool,
-                                  help='Whether functions are being run in jupyter')
 
     # Simulate subcommand
     simulate_parser = subparsers.add_parser("simulate", help="Run a genome simulation")
     
     simulate_parser.add_argument("--n_reads", '-n', type=int, help="Number of reads per simulation")
+    simulate_parser.add_argument('--alt_dbs', '-a', type=bool, help='whether to simulate alternate genome databases')
 
     args = parser.parse_args()
     
@@ -68,6 +67,11 @@ def main():
         cf.config.set('parameters', 'n_species', args.n_species)
         cf.config.set('parameters', 'power_a', args.power_a)
         cf.config.set('parameters', 'n_strains', args.n_strains)
+        
+        # get genome lengths and mapping of GTDB accessions to genbanks
+        genome_lengths, acc2genbank = community.get_genome_lengths()
+        # get genome (genbank) to file mapping from output dir
+        genome2file = community.get_genome2file()
 
         simdata = community.generate_simulations(matches, 
                                        n_sims=args.n_sims, 
@@ -83,10 +87,21 @@ def main():
         # load simdata
         simdata = pd.read_csv(os.path.join(cf.OUTPUT, 'simulation_data.tsv.gz'), sep='\t', index_col=0)
 
-        # get genome lengths and mapping of GTDB accessions to genbanks
-        genome_lengths, acc2genbank = community.get_genome_lengths()
-        # get genome (genbank) to file mapping from output dir
-        genome2file = community.get_genome2file()
+        if os.path.exists(os.path.join(cf.OUTPUT, 'genome_lengths.pkl')):
+
+            genome_lengths = pd.read_pickle(os.path.join(cf.OUTPUT, 'genome_lengths.pkl'))
+            acc2genbank = pd.read_pickle(os.path.join(cf.OUTPUT, 'acc2genbank.pkl'))
+            genome2file = pd.read_pickle(os.path.join(cf.OUTPUT, 'genome2file.pkl'))
+
+        else:
+            # get genome lengths and mapping of GTDB accessions to genbanks
+            genome_lengths, acc2genbank = community.get_genome_lengths()
+            # get genome (genbank) to file mapping from output dir
+            genome2file = community.get_genome2file()
+
+            genome_lengths.to_pickle(os.path.join(cf.OUTPUT, 'genome_lengths.pkl'))
+            acc2genbank.to_pickle(os.path.join(cf.OUTPUT, 'acc2genbank.pkl'))
+            genome2file.to_pickle(os.path.join(cf.OUTPUT, 'genome2file.pkl'))
 
         # construct simulated communites
         simulate.simulate(simdata, 
@@ -95,6 +110,14 @@ def main():
                  acc2genbank=acc2genbank, 
                  genome_lengths=genome_lengths, 
                  genome2file=genome2file)
+        
+        # run sylph with dbs
+        simulate.run_sylph(simdata, 
+                           n_threads=cf.config.get('runtime', 'threads'),
+                           genome2file=genome2file, 
+                           acc2genbank=acc2genbank,
+                           alt_dbs=args.alt_dbs
+                        )
 
 if __name__ == "__main__":
     main()
