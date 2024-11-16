@@ -3,35 +3,29 @@ Module to construct a community given a list of taxon queries
 """
 
 import warnings
-from mgeasysim import config as cf
-import pandas as pd
-from rapidfuzz import process, fuzz
-import numpy as np
 import subprocess
 import os
 import glob
+
+import pandas as pd
+
+import numpy as np
 from tqdm import tqdm
 from Bio import SeqIO
 
+from mgeasysim import config as cf
+from mgeasysim.utils import *
+
 verboseprint = lambda v, _str: print(_str) if v else None 
 
-
-# Function to find top match from slist for each item in qlist
-def find_top_matches(qlist, slist):
-    matches = []
-    for query in qlist:
-        # Extract the best match from slist for the current query
-        match, score, _ = process.extractOne(query, slist)
-        matches.append(match)
-    return pd.Series(matches, index=qlist, name='top_match')
-
-def get_matching_gtdb(taxfile, search_col='species', verbose=True):
+def get_matching_gtdb(taxfile, logger, search_col='species', verbose=True):
     """_summary_
     taxfile: a file containing your list of desired taxa for the simulation
     search_col: the column to search for matches: species is a special key 
     that will search on the last field in the "Gtdb_taxonomy" column
     """
     # load the GTDB md
+    logger.info('Loading GTDB md...')
     verboseprint(verbose, 'Loading GTDB md...')
     gtdb_md = pd.read_csv(cf.GTDB_MD, sep='\t', index_col='accession')
     rep2genomes = gtdb_md.groupby('gtdb_genome_representative').apply(lambda x: list(x.index.unique()))
@@ -64,6 +58,7 @@ def get_matching_gtdb(taxfile, search_col='species', verbose=True):
     scol2acc = pd.Series(index=gtdb_md[search_col], data=gtdb_md.index)
 
     # make df with query, match, match_acc columns
+    logger.info('Finding matches...')
     verboseprint(verbose, 'Finding matches...')
     matches = find_top_matches(qstrs, gtdb_md[search_col].values)
 
@@ -78,12 +73,16 @@ def get_matching_gtdb(taxfile, search_col='species', verbose=True):
     
     return matches
 
-def download_genomes(genbanks):
+def download_genomes(genbanks, logger, verbose=True):
+
+    verboseprint(verbose, 'Writing genome list')
+    logger.info('Writing genome list')
     with open(os.path.join(cf.OUTPUT, 'genbanklist.txt'), 'w') as handle:
         handle.write('\n'.join(genbanks))
     
+    verboseprint(verbose, 'Downloading')
     command1 = [f'datasets download genome accession --inputfile', 
-               os.path.join(cf.OUTPUT, 'genbanklist.txt'),
+            os.path.join(cf.OUTPUT, 'genbanklist.txt'),
                 '--filename', os.path.join(cf.OUTPUT, 'genomes_dataset.zip')]
     
     command2 = ['unzip', '-q', '-o',
@@ -92,20 +91,16 @@ def download_genomes(genbanks):
                 os.path.join(cf.OUTPUT, '')]
     
     command1 = ' '.join(command1)
-    print('Running:')
-    print(command1)
-    p1 = subprocess.Popen(command1.split(' '), 
-                    shell = False,)
-    p1.wait()
-    print('Running:')
-    print(' '.join(command2))
-    
-    p2 = subprocess.Popen(command2, 
-                     shell = False)
-    p2.wait()
+    logger.info(command1)
+    run_command(command1, logger, verbose, 'Downloading NCBI dataset failed')
+
+    command2 = ' '.join(command2)
+    logger.info(command2)
+    run_command(command2, logger, verbose, 'Unzipping NCBI dataset failed')
 
 
-def rename_files(genbanks):
+
+def rename_files(genbanks, logger, verbose):
     """
     Function to rename files downloaded from NCBI, which have long filenames
     """
@@ -115,9 +110,11 @@ def rename_files(genbanks):
     for genome in genbanks:
         s = genome2file[genome]
         new_filename = '/'.join(s.split('/')[:-1]) + '/' + genome + '_genomic.fna'
-        p = subprocess.run(['cp', s, new_filename], capture_output=True, text=True)
+        command = ' '.join(['cp', s, new_filename])
+        if not os.path.exists(new_filename):
+            run_command(command, logger, verbose, f'{command} Copying {s} failed.')
 
-def add_mashdist(matches):
+def add_mashdist(matches, logger, verbose=True):
     """
     Function to add a column with ANI between each genome
     and its alternate strain genome use MASH
@@ -125,9 +122,9 @@ def add_mashdist(matches):
     returns:
     matches with additional column alt_mashdist
     """
-
     matches['alt_mashdist'] = 'none'
-    print('Adding mashdists to matches file')
+    verboseprint(verbose, 'Adding mashdists to matches file')
+    logger.info('Adding mashdists to matches file')
     for index, row in tqdm(matches.dropna().iterrows()):
         file1 = os.path.join(cf.OUTPUT, 
                             'ncbi_dataset/data', 
@@ -138,9 +135,9 @@ def add_mashdist(matches):
                             row['alt_genbank'],
                             row['alt_genbank'] + '_genomic.fna')
         # command = f'mash {file1} {file2}'
-        result = subprocess.run(['mash', 'dist', file1, file2], 
-                                capture_output=True, 
-                                text=True)
+        command = ' '.join(['mash', 'dist', file1, file2])
+        logger.info(command)
+        result = subprocess.run(command, capture_output=True, text=True, shell=True)
         output = result.stdout
         d = float(output.split()[2])
         matches.loc[index, 'alt_mashdist'] = 1 - d
@@ -171,9 +168,9 @@ def generate_abundances(num_species, min_abundance=1e-8, max_abundance=0.5, expo
     
     return final_abundances
 
-def generate_simulations(matches, n_sims, n_species, power_a, n_strains):
+def generate_simulations(logger, matches, n_sims, n_species, power_a, n_strains):
     simulations = []
-
+    logger.info('Making simulations')
     for i in range(n_sims):
         # simulate data
         abundances = generate_abundances(n_species, exponent=power_a)
@@ -191,13 +188,16 @@ def generate_simulations(matches, n_sims, n_species, power_a, n_strains):
         
         # if there's only 1 thing with a genome in the cluster, only 1 strain is possible
         alts = strains_possible.sample(np.min([n_strains, len(strains_possible)]), replace=False)
+        logger.info(f'Number of alternate straiins: {len(alts)}')
 
         # make data
         alt_data = pd.DataFrame(index=[matches[matches.top_match_accession.eq(i)]['top_match_alt'].values[0] for i in alts.index], 
                                 columns=['abun', 'strain_present'])
         
         # make each alternate species either 2x or 1/2 as abundant
+        
         for j, (index, row) in enumerate(alt_data.iterrows()):
+            
             # print(alternate)
             alternate = index
             original = alts.index[j]
@@ -205,7 +205,8 @@ def generate_simulations(matches, n_sims, n_species, power_a, n_strains):
             alt_data.loc[alternate, 'abun'] = val
             alt_data.loc[alternate, 'strain_present'] = 2
             simulation.loc[original, 'strain_present'] = 1
-        
+            logger.info('Original: {original}, alt: {alt}, abun: {val}')
+
         # add to whole data
         simulation = pd.concat([simulation, alt_data])
         simulation['simid'] = i
@@ -213,32 +214,6 @@ def generate_simulations(matches, n_sims, n_species, power_a, n_strains):
         simulations.append(simulation.reset_index())
         
     return pd.concat(simulations)
-
-def get_genome2file():
-    # save distribution of genome files
-    genome2file = pd.Series()
-    genome_folders = glob.glob(os.path.join(cf.OUTPUT, 'ncbi_dataset/data/*/*_genomic.fna'))
-    for g_file in genome_folders:
-        genome = g_file.split('/')[-2]
-        genome2file.loc[genome] = g_file
-
-    return genome2file
-
-def get_genome_lengths():
-    # get genome lengths
-    gtdb_md = pd.read_csv(cf.GTDB_MD, sep='\t', index_col='accession')
-    acc2genbank = gtdb_md['ncbi_genbank_assembly_accession']
-    
-    genome_lengths = pd.Series()
-    genome2file = get_genome2file()
-    for gtdb_acc, genbank_acc in acc2genbank.items():
-        if genbank_acc in genome2file.index:
-            file = genome2file[genbank_acc]
-            with open(file, 'r') as handle:
-                total_length = np.sum([len(r.seq) for r in SeqIO.parse(handle, 'fasta')])
-            genome_lengths.loc[gtdb_acc] = total_length
-
-    return genome_lengths, acc2genbank
 
 
 
