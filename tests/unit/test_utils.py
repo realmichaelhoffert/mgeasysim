@@ -1,9 +1,11 @@
 import pytest
-from io import StringIO
+
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 import numpy as np
+
 import tempfile
+from collections import defaultdict
 
 from mgeasysim.utils import *
 
@@ -66,6 +68,20 @@ def output_fasta():
     if os.path.exists(temp_file.name):
         os.unlink(temp_file.name)
     
+
+@pytest.fixture
+def contaminant_fasta():
+    """Fixture to create a test contaminant FASTA"""
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.fasta') as temp_file:
+        temp_file.write(">contaminant\n")
+        # Create a sequence with different composition
+        # Using a repeated pattern of GGCC
+        sequence = get_random_sequence(1000) + "GGCC" * 25 + get_random_sequence(1000)  # 100 bases total
+        temp_file.write(f"{sequence}\n")
+    
+    yield temp_file.name
+    os.unlink(temp_file.name)
+
 def seq_line_contents(_str):
     return all(i.lower() in ["a","t","g","c","\n"] for i in _str)
 
@@ -74,6 +90,37 @@ def header_line_contents(_str):
 
 def get_random_sequence(l):
     return ''.join(np.random.choice(["A", "T", "G", "C"], l))
+
+def find_sequence_origin(sequence, genome_seq, contaminant_seq, kmer_size=10):
+    """
+    Determines the origin of each region in the contaminated sequence
+    using k-mer matching.
+    
+    Returns:
+        dict: Counts of bases attributed to each source
+    """
+    origins = defaultdict(int)
+    
+    # Convert sequences to sets of kmers for each source
+    genome_kmers = {genome_seq[i:i+kmer_size] 
+                   for i in range(len(genome_seq)-kmer_size+1)}
+    contaminant_kmers = {contaminant_seq[i:i+kmer_size] 
+                        for i in range(len(contaminant_seq)-kmer_size+1)}
+    
+    # Scan the sequence with a sliding window
+    for i in range(len(sequence)-kmer_size+1):
+        kmer = sequence[i:i+kmer_size]
+        
+        if kmer in genome_kmers and kmer not in contaminant_kmers:
+            origins['genome'] += 1
+        elif kmer in contaminant_kmers and kmer not in genome_kmers:
+            origins['contaminant'] += 1
+        else:
+            origins['ambiguous'] += 1
+    
+    # Convert from kmer counts to base counts
+    # The first base of each k-mer represents one unique base
+    return dict(origins)
 
 class TestDecompleteGenome:
 
@@ -122,66 +169,81 @@ class TestDecompleteGenome:
             DecompleteGenome(test_fasta, 1, output_fasta, to_file=True )
 
 
-    # @pytest.mark.parametrize("reduction_percentage", [0, 25, 75, 100])
-    # def test_various_perc(self, ):
 
 
-    # # Test for DecompleteGenome with to_file=False (no file output)
-    # def test_decomplete_genome(self, create_temp_fasta, create_temp_out):
-    #     # Simulate file handling with StringIO
+    
 
+class TestContaminateGenome:
+
+    def test_contaminate_file(self, test_fasta, contaminant_fasta, output_fasta):
+        """
+        Test to ensure contaminated file is correct length
+        """
+        ContaminateGenome(test_fasta, contaminant_fasta, output_fasta, 
+                     contamination_percentage=0.25)
+
+        # Read all sequences
+        genome_seq = ''.join([str(r.seq) for r in SeqIO.parse(test_fasta, "fasta")])
+        contaminant_seq =''.join([str(r.seq) for r in SeqIO.parse(contaminant_fasta, "fasta")])
+        contaminated_seq = ''.join([str(r.seq) for r in SeqIO.parse(output_fasta, "fasta")])
+
+        # troubleshooting for test failure
+        print([(len(r.seq), r.id) for r in SeqIO.parse(output_fasta, "fasta")])
+        print(len(contaminated_seq))
         
-    #     # Run the function with 80% completeness
-    #     new_records = DecompleteGenome(create_temp_fasta(), completeness=0.8, outfile=output_file, to_file=False)
+        # Verify output length matches input length
+        expected_length =((len(genome_seq) * 0.75) + (len(contaminant_seq) * 0.25))
+        assert len(contaminated_seq) == pytest.approx(expected_length, abs=5), \
+            "Output sequence length should match input genome length"
 
-    #     # Check that the records returned have the correct size
-    #     for record in new_records:
-    #         chunk_len = int(np.floor(len(record.seq) * (1 - 0.8)))  # 20% removal
-    #         assert len(record.seq) == chunk_len
 
-    # # Test for DecompleteGenome with to_file=True (writing to file)
-    # def test_decomplete_genome_write_to_file(self, mock_randint):
-    #     # Simulate file handling with StringIO
-    #     mock_input = StringIO(fasta_data)
-    #     mock_output = StringIO()
+    def test_contaminate_genome(self, test_fasta, contaminant_fasta, output_fasta):
+        """
+        Test that ContaminateGenome produces correct proportion of contamination
+        """
+        cp = 0.25
+        # Call the function being tested
+        ContaminateGenome(test_fasta, contaminant_fasta, output_fasta, 
+                        contamination_percentage=cp)
         
-    #     # Run the function with 80% completeness and to_file=True
-    #     DecompleteGenome(genome_file, completeness=0.8, outfile=output_file, to_file=True)
-
-    #     # Check that the output contains the expected data
-    #     mock_output.seek(0)  # Rewind to start of the StringIO buffer
-    #     output_records = list(SeqIO.parse(mock_output, "fasta"))
+        # Read all sequences
+        genome_seq = ''.join([str(r.seq) for r in SeqIO.parse(test_fasta, "fasta")])
+        contaminant_seq =''.join([str(r.seq) for r in SeqIO.parse(contaminant_fasta, "fasta")])
+        contaminated_seq = ''.join([str(r.seq) for r in SeqIO.parse(output_fasta, "fasta")])
         
-    #     # Ensure 4 records are created (2 chunks per original record)
-    #     assert len(output_records) == 4
+        # Analyze sequence composition
+        origins = find_sequence_origin(contaminated_seq, 
+                                       genome_seq, 
+                                       contaminant_seq, kmer_size=21)
+        
+        
+        total_assigned_bases = origins['genome'] + origins['contaminant']
+        contaminant_percentage = (origins['contaminant'] / total_assigned_bases)
 
-    #     # Check that each chunk has the expected length
-    #     for record in output_records:
-    #         chunk_len = int(np.floor(len(record.seq) * (1 - 0.8)))
-    #         assert len(record.seq) == chunk_len
+        # Optional: Print detailed statistics
+        print(f"\nSequence origin analysis:")
+        print(f"Genome bases: {origins['genome']}")
+        print(f"Contaminant bases: {origins['contaminant']}")
+        print(f"Ambiguous bases: {origins.get('ambiguous', 0)}")
+        print(f"Contaminant percentage: {contaminant_percentage:.3f}%")
 
-    # # Test for DecompleteGenome with invalid completeness value
-    # def test_decomplete_genome_invalid_completeness(self):
-    #     # Test for invalid completeness value (should raise an error)
-    #     with pytest.raises(ValueError):
-    #         DecompleteGenome(genome_file, completeness=1.5, outfile=output_file, to_file=False)
+        # expected amount of DNA from each
+        bases_eg = (len(genome_seq) * (1 - cp))
+        bases_ec = len(contaminant_seq) * cp
 
-    #     with pytest.raises(ValueError):
-    #         DecompleteGenome(genome_file, completeness=0, outfile=output_file, to_file=False)
-
-    # # Test for DecompleteGenome with to_file=False and verifying the returned records
-    # def test_decomplete_genome_no_file_output(self, mock_randint):
-    #     # Simulate file handling with StringIO
-    #     mock_input = StringIO(fasta_data)
-    #     mock_output = StringIO()
-
-    #     # Run the function with to_file=False
-    #     new_records = DecompleteGenome(genome_file, completeness=0.8, outfile=output_file, to_file=False)
-
-    #     # Check that we get the expected number of records (2 chunks per original record)
-    #     assert len(new_records) == 4
-
-    #     # Check the length of each chunk
-    #     for record in new_records:
-    #         chunk_len = int(np.floor(len(record.seq) * (1 - 0.8)))
-    #         assert len(record.seq) == chunk_len
+        expected_genome = bases_eg / len(contaminated_seq)
+        expected_contaminant = bases_ec / len(contaminated_seq)
+        
+        if total_assigned_bases > 0:  # avoid division by zero
+            contaminant_percentage = (origins['contaminant'] / total_assigned_bases)
+            # Check if contaminant percentage is close to 25%
+            assert contaminant_percentage == pytest.approx(expected_contaminant, abs=.005), \
+                f"Contaminant percentage ({contaminant_percentage:.3f}%) " \
+                f"is not close to target ({expected_contaminant}%)"
+            
+            og_percentage = (origins['genome'] / total_assigned_bases)
+            # Check if contaminant percentage is close to 25%
+            assert og_percentage == pytest.approx(expected_genome, abs=.005), \
+                f"Contaminant percentage ({contaminant_percentage:.3f}%) " \
+                f"is not close to target ({expected_genome}%)"
+            

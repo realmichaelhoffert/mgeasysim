@@ -160,11 +160,15 @@ def run_command(command, logger, verbose=False, error_message=None):
         raise RuntimeError(str(e)) from e
     
 # outfile MUST end in .fa
-def ContaminateGenome(genome, contaminant, outfile):
+def ContaminateGenome(genome, contaminant, outfile, contamination_percentage):
     # add 25% contaminant reads to fasta
     # first decomplete the genome
-    genome_records = DecompleteGenome(genome, 0.75, outfile, to_file=False)
-    contam_records = DecompleteGenome(contaminant, 0.25, outfile, to_file=False)
+    if not 0.95 > contamination_percentage > 0.05:
+        raise ValueError('Contamination percentage is invalid')
+
+    genome_records = DecompleteGenome(genome, 1 - contamination_percentage, outfile, to_file=False)
+    contam_records = DecompleteGenome(contaminant, contamination_percentage, outfile, to_file=False)
+    
     with open(outfile, 'w') as handle:
         SeqIO.write(genome_records + contam_records, handle, format='fasta')
          
