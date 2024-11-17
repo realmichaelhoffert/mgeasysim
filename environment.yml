@@ -20,4 +20,3 @@ dependencies:
   - python=3.12
   - sylph
   - art
-prefix: /usr/local/Caskroom/miniforge/base/envs/mgeasysim
