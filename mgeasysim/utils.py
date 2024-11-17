@@ -174,6 +174,9 @@ def DecompleteGenome(genome, completeness, outfile, to_file=False):
     # get length of sequence to remove
     # pull it out and make two new records
     # save records to file
+    if not 1 > completeness > 0:
+        raise ValueError('Completeness must be in (0, 1)')
+
     with open(genome, 'r') as handle:
         records = [r for r in SeqIO.parse(handle, 'fasta')]
         
@@ -183,6 +186,9 @@ def DecompleteGenome(genome, completeness, outfile, to_file=False):
         r_len = len(r.seq)
         # get a chunk to remove
         chunk = int(np.floor(r_len * (1 - completeness)))
+        if r_len - chunk < 10:
+            raise ValueError('completeness reduction produced chunk w/ len < 10')
+        
         # determine start location
         start = np.random.randint(1, r_len - chunk - 1)
         # get chunks
