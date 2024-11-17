@@ -27,7 +27,7 @@ We're on version 0.2.0: not much functionality has been added.
 1. Install with mamba:
 
 ```bash
-mamba create env -f environment.yml
+mamba create -f environment.yml
 ```
 
 2. Create a GTDB folder with the GTDB metadata file in it in a directory of your choosing. Right now, you only need metadata.
