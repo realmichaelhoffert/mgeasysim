@@ -160,11 +160,15 @@ def run_command(command, logger, verbose=False, error_message=None):
         raise RuntimeError(str(e)) from e
     
 # outfile MUST end in .fa
-def ContaminateGenome(genome, contaminant, outfile):
+def ContaminateGenome(genome, contaminant, outfile, contamination_percentage):
     # add 25% contaminant reads to fasta
     # first decomplete the genome
-    genome_records = DecompleteGenome(genome, 0.75, outfile, to_file=False)
-    contam_records = DecompleteGenome(contaminant, 0.25, outfile, to_file=False)
+    if not 0.95 > contamination_percentage > 0.05:
+        raise ValueError('Contamination percentage is invalid')
+
+    genome_records = DecompleteGenome(genome, 1 - contamination_percentage, outfile, to_file=False)
+    contam_records = DecompleteGenome(contaminant, contamination_percentage, outfile, to_file=False)
+    
     with open(outfile, 'w') as handle:
         SeqIO.write(genome_records + contam_records, handle, format='fasta')
          
@@ -174,6 +178,9 @@ def DecompleteGenome(genome, completeness, outfile, to_file=False):
     # get length of sequence to remove
     # pull it out and make two new records
     # save records to file
+    if not 1 > completeness > 0:
+        raise ValueError('Completeness must be in (0, 1)')
+
     with open(genome, 'r') as handle:
         records = [r for r in SeqIO.parse(handle, 'fasta')]
         
@@ -183,6 +190,9 @@ def DecompleteGenome(genome, completeness, outfile, to_file=False):
         r_len = len(r.seq)
         # get a chunk to remove
         chunk = int(np.floor(r_len * (1 - completeness)))
+        if r_len - chunk < 10:
+            raise ValueError('completeness reduction produced chunk w/ len < 10')
+        
         # determine start location
         start = np.random.randint(1, r_len - chunk - 1)
         # get chunks
