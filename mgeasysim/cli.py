@@ -49,6 +49,7 @@ def main():
     args = parser.parse_args()
     
     if args.command == 'config':
+        
         cf.config._clear()
         cf.config.set('database', 'gtdb_loc', os.path.abspath(args.gtdb))
         cf.config.set('locations', 'output', os.path.abspath(args.output))

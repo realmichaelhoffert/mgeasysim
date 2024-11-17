@@ -157,6 +157,7 @@ def generate_alt_databases(simulation_data, logger, genome2file, acc2genbank, ve
                 'neither_strain', 
                 'contam', 
                 'incomp']
+    
     BASE_PATH = os.path.join(cf.OUTPUT, 'simulations')
 
     for sim in simulation_data['simid'].unique():
