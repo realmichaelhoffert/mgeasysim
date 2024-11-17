@@ -1,6 +1,7 @@
 name: mgeasysim
 channels:
   - conda-forge
+  - bioconda
 dependencies:
   - pytest
   - jupyterlab
