@@ -29,6 +29,9 @@ def get_genome2file():
     # save distribution of genome files
     genome2file = pd.Series()
     genome_folders = glob.glob(os.path.join(cf.OUTPUT, 'ncbi_dataset/data/*/*_genomic.fna'))
+    if len(genome_folders) == 0:
+        raise FileNotFoundError('No genomes found. Did the download fail?')
+    
     for g_file in genome_folders:
         genome = g_file.split('/')[-2]
         genome2file.loc[genome] = g_file
@@ -168,7 +171,7 @@ def ContaminateGenome(genome, contaminant, outfile, contamination_percentage):
 
     genome_records = DecompleteGenome(genome, 1 - contamination_percentage, outfile, to_file=False)
     contam_records = DecompleteGenome(contaminant, contamination_percentage, outfile, to_file=False)
-    
+
     with open(outfile, 'w') as handle:
         SeqIO.write(genome_records + contam_records, handle, format='fasta')
          
