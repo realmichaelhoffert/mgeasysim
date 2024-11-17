@@ -1,0 +1,22 @@
+name: mgeasysim
+channels:
+  - conda-forge
+dependencies:
+  - pytest
+  - jupyterlab
+  - seaborn
+  - matplotlib
+  - numpy
+  - pandas
+  - rapidfuzz
+  - ca-certificates
+  - certifi
+  - openssl
+  - ncbi-datasets-cli
+  - mash
+  - tqdm
+  - biopython
+  - python=3.12
+  - sylph
+  - art
+prefix: /usr/local/Caskroom/miniforge/base/envs/mgeasysim
