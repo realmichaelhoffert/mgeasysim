@@ -12,7 +12,7 @@ You're developing a tool to analyze the metagenomic sequencing of bacteria in hy
 
 ### How it works
 
-We're on version 0.2.0: not much functionality has been added.
+I'm on version 0.2.0: not much functionality has been added.
 
 1. You provide a newline-delimited list of GTDB species names.
 2. A match-list is constructed: each of your accessions is matched to a GTDB accession. 
