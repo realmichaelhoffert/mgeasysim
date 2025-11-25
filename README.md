@@ -113,7 +113,7 @@ Arguments:
 5. n_strains: the number of co-occurring strains (sub-species) among the n_species species in the community
 6. jupyter: whether the code is being run in a jupyter notebook (not relevant) 
 
-### Simulating communities (`simulate` module)
+### 3. Simulating communities (`simulate` module)
 
 ```bash
 usage: mgeasysim simulate [-h] [--n_reads N_READS] [--alt_dbs ALT_DBS]
