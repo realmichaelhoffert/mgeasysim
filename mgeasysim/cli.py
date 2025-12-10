@@ -152,11 +152,12 @@ def main():
         # load simdata
         simdata = pd.read_csv(config.get('locations', 'simulations_path'), sep='\t', index_col=0)
         assert all(s in '1234567890,' for s in args.use_comms), f"Invalid sim char found: {args.use_comms}"
-        simdata = simdata[simdata['simid'].isin([int(s) for s in args.use_comms.split(',')])]
+        simdata = simdata[simdata['simid'].isin([int(s)-1 for s in args.use_comms.split(',')])]
         print(f'Using communities: {simdata.simid.unique()}')
 
         output_loc = config.get('locations', 'outputs')
         community.configure_output(output_loc)
+        utils.configure_output(output_loc)
         if os.path.exists(os.path.join(output_loc, 'genome_lengths.pkl')):
 
             genome_lengths = pd.read_pickle(os.path.join(output_loc, 'genome_lengths.pkl'))
@@ -176,7 +177,9 @@ def main():
         # set up logger
         utils.configure_output(os.path.abspath(args.output))
         logger = utils.setup_logging_for_function('simulate')
-        logger.info(f'Establishing base dir at {cf.OUTPUT} - simulations')
+        logger.info(f'Establishing base dir at {os.path.abspath(args.output)} - simulations')
+
+        simulate.configure_output(os.path.abspath(args.output))
         
         # construct simulated communites
         simulate.simulate(simdata, 
@@ -187,6 +190,7 @@ def main():
                  genome_lengths=genome_lengths, 
                  genome2file=genome2file,
                  verbose=config.get('parameters', 'verbose'))
+        
         # if args.alt_dbs:
         #     PRINT("RUNNING EVEN THOUGH I SHOULDN'T")
         #     # run sylph with dbs

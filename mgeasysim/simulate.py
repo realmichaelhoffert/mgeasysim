@@ -7,8 +7,7 @@ import glob
 import numpy as np
 import pandas as pd
 
-from mgeasysim import config as cf
-import mgeasysim.utils
+from mgeasysim import utils
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -31,8 +30,8 @@ def simulate(simulation_data,
              genome2file, 
              verbose=True):
 
+    
     BASE_PATH = os.path.join(_GLOBAL_OUTPUT)
-    os.makedirs(BASE_PATH, exist_ok=True)
     
     # for each simulation
     total_reads = 0
@@ -74,7 +73,7 @@ def simulate(simulation_data,
 
             # copy genome to genomes folder for default db
             command = f'cp {file} {BASE_PATH}/sim{sim}/genomes/sylph_db/{row["top_match_accession"]}_genomic.fna'
-            run_command(command, 
+            utils.run_command(command, 
                         logger, 
                         verbose=verbose, 
                         error_message=f'Copy of genome {row["top_match_accession"]} to new db folder failed')
@@ -99,7 +98,7 @@ def simulate(simulation_data,
             em1 = 'Art illumina / gzip command failed for file: '
             with ThreadPoolExecutor(max_workers=n_threads) as executor:
                 # execute with custom error message
-                executor.map(lambda args: run_command(*args), [(cmd, 
+                executor.map(lambda args: utils.run_command(*args), [(cmd, 
                                                                 logger, 
                                                                 verbose, 
                                                                 em1 + cmd.split(' -i ')[-1].split(' -l 150')[0]) for cmd in read_simulations])
@@ -108,11 +107,11 @@ def simulate(simulation_data,
         
         command = f'cat {BASE_PATH}/sim{sim}/fqs/*_R1.fq.gz > {BASE_PATH}/sim{sim}/sim{sim}_R1.fq.gz'
         logger.info(command)
-        run_command(command, logger, verbose, f"Generating {sim} R1 failed")
+        utils.run_command(command, logger, verbose, f"Generating {sim} R1 failed")
 
         command = f'cat {BASE_PATH}/sim{sim}/fqs/*_R2.fq.gz > {BASE_PATH}/sim{sim}/sim{sim}_R2.fq.gz'
         logger.info(command)
-        run_command(command, logger, verbose, f"Generating {sim} R2 failed")
+        utils.run_command(command, logger, verbose, f"Generating {sim} R2 failed")
         # process = subprocess.Popen(command, 
         #                            stdout=subprocess.PIPE, 
         #                            stderr=subprocess.PIPE, 
@@ -152,12 +151,12 @@ def download_contaminants(logger, verbose=True):
     command1 = ' '.join(command1)
     logger.info('Getting contaminants:')
     logger.info(command1)
-    run_command(command1, logger, verbose, f"Retrieving contaminants from NCBI failed")
+    utils.run_command(command1, logger, verbose, f"Retrieving contaminants from NCBI failed")
 
     command2 = ' '.join(command2)
     logger.info('unzipping contaminants:')
     logger.info(command2)
-    run_command(command2, logger, verbose, f"Unzipping contaminants NCBI dataset failed")
+    utils.run_command(command2, logger, verbose, f"Unzipping contaminants NCBI dataset failed")
         
 def generate_alt_databases(simulation_data, logger, genome2file, acc2genbank, verbose=True):
     
@@ -217,7 +216,7 @@ def generate_alt_databases(simulation_data, logger, genome2file, acc2genbank, ve
                     if val < 1:
                         DecompleteGenome(genome_file, 0.75, outfile, to_file=True)
                     else:
-                        run_command(f'cp {genome_file} {outfile}', logger, verbose, f"Copying {genome_file} failed")
+                        utils.run_command(f'cp {genome_file} {outfile}', logger, verbose, f"Copying {genome_file} failed")
                 else:
                     count += 1
                     # simulate contamination
@@ -264,10 +263,10 @@ def run_sylph(simdata, n_threads, genome2file, acc2genbank, alt_dbs = False, con
         for _db in dbs:
             logger.info(f'Sketching {_db}...')
             command = f'sylph sketch {BASE_PATH}/sim{sim}/genomes/{_db}/*.fna -o {BASE_PATH}/sim{sim}/dbs/{_db} -t {n_threads} -c {containment}'
-            run_command(command, logger, verbose, f'Generating sylph db for {sim} and {_db} failed')
+            utils.run_command(command, logger, verbose, f'Generating sylph db for {sim} and {_db} failed')
             
             logger.info(f'Profiling with {_db} to output {BASE_PATH}/sim{sim}/sim{sim}_{_db}_profile.tsv')
             command = f'sylph profile {BASE_PATH}/sim{sim}/dbs/{_db}.syldb -1 {BASE_PATH}/sim{sim}/sim{sim}_R1.fq.gz -2 {BASE_PATH}/sim{sim}/sim{sim}_R2.fq.gz -c {containment} -o {BASE_PATH}/sim{sim}/sim{sim}_{_db}_profile.tsv -t {n_threads}'
-            run_command(command, logger, verbose, f'Generating sylph profile for {sim} and {_db} failed')
+            utils.run_command(command, logger, verbose, f'Generating sylph profile for {sim} and {_db} failed')
             logger.info('\n')
 
