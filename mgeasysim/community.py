@@ -18,7 +18,14 @@ from mgeasysim.utils import *
 
 verboseprint = lambda v, _str: print(_str) if v else None 
 
-def get_matching_gtdb(taxfile, logger, search_col='species', verbose=True):
+_GLOBAL_OUTPUT = None
+
+def configure_output(outloc):
+    global _GLOBAL_OUTPUT
+    _GLOBAL_OUTPUT = outloc
+    print(f'Module "community" configured to output: {_GLOBAL_OUTPUT}')
+
+def get_matching_gtdb(gtdb_md, taxfile, logger, search_col='species', verbose=True):
     """_summary_
     taxfile: a file containing your list of desired taxa for the simulation
     search_col: the column to search for matches: species is a special key 
@@ -27,15 +34,16 @@ def get_matching_gtdb(taxfile, logger, search_col='species', verbose=True):
     # load the GTDB md
     logger.info('Loading GTDB md...')
     verboseprint(verbose, 'Loading GTDB md...')
-    gtdb_md = pd.read_csv(cf.GTDB_MD, sep='\t', index_col='accession')
-    rep2genomes = gtdb_md.groupby('gtdb_genome_representative').apply(lambda x: list(x.index.unique()))
+    gtdb_md = pd.read_csv(gtdb_md, sep='\t')
+    rep2genomes = gtdb_md.groupby('gtdb_genome_representative').apply(lambda x: list(x['accession'].unique()))
+    gtdb_md = gtdb_md.set_index('accession')
     
     # only consider representative genomes
     acc2genbank = gtdb_md['ncbi_genbank_assembly_accession']
 
     # get and save taxon counts
     taxon_count = gtdb_md.groupby('gtdb_taxonomy').count()['ambiguous_bases']
-    gtdb_md['gtdb_taxonomy'].map(taxon_count).to_pickle(os.path.join(cf.OUTPUT, 'cluster_sizes.pkl'))
+    gtdb_md['gtdb_taxonomy'].map(taxon_count).to_pickle(os.path.join(_GLOBAL_OUTPUT, 'cluster_sizes.pkl'))
 
     gtdb_md = gtdb_md[gtdb_md.gtdb_representative.eq('t')]
     
@@ -75,21 +83,21 @@ def get_matching_gtdb(taxfile, logger, search_col='species', verbose=True):
 
 def download_genomes(genbanks, logger, verbose=True):
 
-    if not os.path.exists(os.path.join(cf.OUTPUT, 'genomes_dataset.zip')):
+    if not os.path.exists(os.path.join(_GLOBAL_OUTPUT, 'genomes_dataset.zip')):
         verboseprint(verbose, 'Writing genome list')
         logger.info('Writing genome list')
-        with open(os.path.join(cf.OUTPUT, 'genbanklist.txt'), 'w') as handle:
+        with open(os.path.join(_GLOBAL_OUTPUT, 'genbanklist.txt'), 'w') as handle:
             handle.write('\n'.join(genbanks))
         
         verboseprint(verbose, 'Downloading')
         command1 = [f'datasets download genome accession --inputfile', 
-                os.path.join(cf.OUTPUT, 'genbanklist.txt'),
-                    '--filename', os.path.join(cf.OUTPUT, 'genomes_dataset.zip')]
+                os.path.join(_GLOBAL_OUTPUT, 'genbanklist.txt'),
+                    '--filename', os.path.join(_GLOBAL_OUTPUT, 'genomes_dataset.zip')]
         
         command2 = ['unzip', '-q', '-o',
-                    os.path.join(cf.OUTPUT, 'genomes_dataset.zip'),
+                    os.path.join(_GLOBAL_OUTPUT, 'genomes_dataset.zip'),
                     '-d',
-                    os.path.join(cf.OUTPUT, '')]
+                    os.path.join(_GLOBAL_OUTPUT, '')]
         
         command1 = ' '.join(command1)
         logger.info(command1)
@@ -133,11 +141,11 @@ def add_mashdist(matches, logger, verbose=True):
     verboseprint(verbose, 'Adding mashdists to matches file')
     logger.info('Adding mashdists to matches file')
     for index, row in tqdm(matches.dropna().iterrows()):
-        file1 = os.path.join(cf.OUTPUT, 
+        file1 = os.path.join(_GLOBAL_OUTPUT, 
                             'ncbi_dataset/data', 
                             row['top_match_genbank'],
                             row['top_match_genbank'] + '_genomic.fna')
-        file2 = os.path.join(cf.OUTPUT, 
+        file2 = os.path.join(_GLOBAL_OUTPUT, 
                             'ncbi_dataset/data', 
                             row['alt_genbank'],
                             row['alt_genbank'] + '_genomic.fna')
@@ -182,7 +190,7 @@ def generate_simulations(logger, matches, n_sims, n_species, power_a, n_strains)
     for i in range(n_sims):
         # simulate data
         n_valid_matches = len(matches['top_match_accession'].drop_duplicates())
-        print('Uniqueness of matches:', len(matches), n_valid_matches)
+        
         abundances = generate_abundances(np.min([n_valid_matches, n_species]), exponent=power_a)
         simulation = pd.DataFrame(index=matches['top_match_accession'].drop_duplicates().sample(np.min([n_valid_matches, n_species]), replace=False), 
                                                                       data=abundances, 
@@ -190,7 +198,7 @@ def generate_simulations(logger, matches, n_sims, n_species, power_a, n_strains)
         # column to indicate which strains have duplicates
         simulation['strain_present'] = 0
 
-        taxon_counts = pd.read_pickle(os.path.join(cf.OUTPUT, 'cluster_sizes.pkl'))
+        taxon_counts = pd.read_pickle(os.path.join(_GLOBAL_OUTPUT, 'cluster_sizes.pkl'))
         simulation['n_genomes'] = taxon_counts.reindex(simulation.index)
 
         # only get strains from GTDB genomes with more than 1 genome in the cluster 
