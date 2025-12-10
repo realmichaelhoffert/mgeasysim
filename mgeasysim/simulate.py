@@ -8,20 +8,30 @@ import numpy as np
 import pandas as pd
 
 from mgeasysim import config as cf
-from mgeasysim.utils import *
+import mgeasysim.utils
 
 from concurrent.futures import ThreadPoolExecutor
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
-    
 
-def simulate(simulation_data, N_READS, n_threads, acc2genbank, genome_lengths, genome2file, verbose=True):
+_GLOBAL_OUTPUT = None
 
-    logger = setup_logging_for_function('simulate')
-    logger.info(f'Establishing base dir at {cf.OUTPUT} - simulations')
+def configure_output(outloc):
+    global _GLOBAL_OUTPUT
+    _GLOBAL_OUTPUT = outloc
+    print(f'Module "simulate" configured to output: {_GLOBAL_OUTPUT}')
 
-    BASE_PATH = os.path.join(cf.OUTPUT, 'simulations')
+def simulate(simulation_data, 
+             logger,
+             N_READS, 
+             n_threads, 
+             acc2genbank, 
+             genome_lengths, 
+             genome2file, 
+             verbose=True):
+
+    BASE_PATH = os.path.join(_GLOBAL_OUTPUT)
     os.makedirs(BASE_PATH, exist_ok=True)
     
     # for each simulation
@@ -127,17 +137,17 @@ def download_contaminants(logger, verbose=True):
     
     current_dir = os.path.dirname(__file__)
     contam_path = os.path.join(current_dir, '../files', 'contaminants.txt')
-    logger.info('Making contaminant directory: ' + os.path.join(cf.OUTPUT, 'contaminants'))
-    os.makedirs(os.path.join(cf.OUTPUT, 'contaminants'), exist_ok=True)
+    logger.info('Making contaminant directory: ' + os.path.join(_GLOBAL_OUTPUT, 'contaminants'))
+    os.makedirs(os.path.join(_GLOBAL_OUTPUT, 'contaminants'), exist_ok=True)
     
     command1 = [f'datasets download genome accession --inputfile', 
                 contam_path,
-                '--filename', os.path.join(cf.OUTPUT, 'contaminants', 'genomes_dataset.zip')]
+                '--filename', os.path.join(_GLOBAL_OUTPUT, 'contaminants', 'genomes_dataset.zip')]
 
     command2 = ['unzip', '-q', '-o',
-                os.path.join(cf.OUTPUT, 'contaminants', 'genomes_dataset.zip'),
+                os.path.join(_GLOBAL_OUTPUT, 'contaminants', 'genomes_dataset.zip'),
                 '-d',
-                os.path.join(cf.OUTPUT, 'contaminants')]
+                os.path.join(_GLOBAL_OUTPUT, 'contaminants')]
 
     command1 = ' '.join(command1)
     logger.info('Getting contaminants:')
@@ -159,7 +169,7 @@ def generate_alt_databases(simulation_data, logger, genome2file, acc2genbank, ve
                 'contam', 
                 'incomp']
     
-    BASE_PATH = os.path.join(cf.OUTPUT, 'simulations')
+    BASE_PATH = os.path.join(_GLOBAL_OUTPUT, 'simulations')
 
     for sim in simulation_data['simid'].unique():
         logger.info(f'For {sim}:')
@@ -213,9 +223,9 @@ def generate_alt_databases(simulation_data, logger, genome2file, acc2genbank, ve
                     # simulate contamination
                     if val == 1:
 
-                        if not os.path.exists(os.path.join(cf.OUTPUT, 'contaminants')):
+                        if not os.path.exists(os.path.join(_GLOBAL_OUTPUT, 'contaminants')):
                             download_contaminants(logger)
-                        contam_path = os.path.join(cf.OUTPUT, 'contaminants')    
+                        contam_path = os.path.join(_GLOBAL_OUTPUT, 'contaminants')    
                         contaminant_files = glob.glob(f'{contam_path}/ncbi_dataset/data/*/*.fna')
                         ContaminateGenome(genome_file, np.random.choice(contaminant_files), outfile)
                     else:
@@ -226,8 +236,9 @@ def generate_alt_databases(simulation_data, logger, genome2file, acc2genbank, ve
 
 def run_sylph(simdata, n_threads, genome2file, acc2genbank, alt_dbs = False, containment=100, verbose=True):
 
-    BASE_PATH = os.path.join(cf.OUTPUT, 'simulations')
-    logger = setup_logging_for_function('sylph')
+    BASE_PATH = os.path.join(_GLOBAL_OUTPUT, 'simulations')
+    utils.configure_output(_GLOBAL_OUTPUT)
+    logger = utils.setup_logging_for_function('sylph')
 
     logger.info('Running sylph...')
     ### RUN SYLPH

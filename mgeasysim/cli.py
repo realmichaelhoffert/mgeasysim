@@ -57,7 +57,7 @@ def main():
                                required=True)
     simulate_parser.add_argument('--output', '-o', required=True, type=str,
                                   help='Where to write files')
-    simulate_parser.add_argument('--use_sims', '-s', required=False, type=str,
+    simulate_parser.add_argument('--use_comms', '-u', required=False, type=str,
                                  default = '1,2,3,4,5',
                                   help='Which simulations to use (1-indexed)')
     simulate_parser.add_argument("--n_reads", '-n', type=int, help="Number of reads per simulation")
@@ -138,6 +138,7 @@ def main():
         config.set('locations', 'simulations_path', sim_path)
         simdata.to_csv(sim_path, sep='\t', compression='gzip')
 
+        # save config
         config._save_config(config.config_path)
     
     elif args.command == "simulate":
@@ -150,8 +151,12 @@ def main():
 
         # load simdata
         simdata = pd.read_csv(config.get('locations', 'simulations_path'), sep='\t', index_col=0)
+        assert all(s in '1234567890,' for s in args.use_comms), f"Invalid sim char found: {args.use_comms}"
+        simdata = simdata[simdata['simid'].isin([int(s) for s in args.use_comms.split(',')])]
+        print(f'Using communities: {simdata.simid.unique()}')
 
         output_loc = config.get('locations', 'outputs')
+        community.configure_output(output_loc)
         if os.path.exists(os.path.join(output_loc, 'genome_lengths.pkl')):
 
             genome_lengths = pd.read_pickle(os.path.join(output_loc, 'genome_lengths.pkl'))
@@ -165,11 +170,17 @@ def main():
             genome2file = community.get_genome2file()
 
             genome_lengths.to_pickle(os.path.join(output_loc, 'genome_lengths.pkl'))
-            acc2genbank.to_pickle(os.path.join(output_loc 'acc2genbank.pkl'))
+            acc2genbank.to_pickle(os.path.join(output_loc, 'acc2genbank.pkl'))
             genome2file.to_pickle(os.path.join(output_loc, 'genome2file.pkl'))
 
+        # set up logger
+        utils.configure_output(os.path.abspath(args.output))
+        logger = utils.setup_logging_for_function('simulate')
+        logger.info(f'Establishing base dir at {cf.OUTPUT} - simulations')
+        
         # construct simulated communites
         simulate.simulate(simdata, 
+                 logger=logger,
                  N_READS=args.n_reads, 
                  n_threads=config.get('runtime', 'threads'),
                  acc2genbank=acc2genbank, 
