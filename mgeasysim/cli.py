@@ -58,15 +58,18 @@ def main():
 
     elif args.command == "community":
         
+        assert os.path.exists(args.taxlist)
         os.makedirs(os.path.abspath(cf.OUTPUT), exist_ok=True)
+        
         logger = setup_logging_for_function('community')
         lvargs = {'logger':logger, 'verbose':cf.config.get('parameters', 'verbose')}
         matches = community.get_matching_gtdb(args.taxlist, **lvargs)
         genbanks = list(matches['top_match_genbank'].dropna().unique()) + list(matches['alt_genbank'].dropna().unique())
         
-        community.download_genomes(genbanks, **lvargs)
-        community.rename_files(genbanks, **lvargs)
-        matches = community.add_mashdist(matches, **lvargs)
+        gate = community.download_genomes(genbanks, **lvargs)
+        if gate and os.path.exists(os.path.join(cf.OUTPUT, 'matches.tsv.gz')):
+            community.rename_files(genbanks, **lvargs)
+            matches = community.add_mashdist(matches, **lvargs)
 
         cf.config.set('locations', 'matches_path', os.path.join(cf.OUTPUT, 'matches.tsv.gz'))
         matches.to_csv(os.path.join(cf.OUTPUT, 'matches.tsv.gz'), sep='\t', compression='gzip')
@@ -119,15 +122,16 @@ def main():
                  genome_lengths=genome_lengths, 
                  genome2file=genome2file,
                  verbose=cf.config.get('parameters', 'verbose'))
-        
-        # run sylph with dbs
-        simulate.run_sylph(simdata, 
-                           n_threads=cf.config.get('runtime', 'threads'),
-                           genome2file=genome2file, 
-                           acc2genbank=acc2genbank,
-                           alt_dbs=args.alt_dbs,
-                           verbose=cf.config.get('parameters', 'verbose')
-                        )
+        # if args.alt_dbs:
+        #     PRINT("RUNNING EVEN THOUGH I SHOULDN'T")
+        #     # run sylph with dbs
+        #     simulate.run_sylph(simdata, 
+        #                        n_threads=cf.config.get('runtime', 'threads'),
+        #                        genome2file=genome2file, 
+        #                        acc2genbank=acc2genbank,
+        #                        alt_dbs=args.alt_dbs,
+        #                        verbose=cf.config.get('parameters', 'verbose')
+        #                     )
 
 if __name__ == "__main__":
     main()

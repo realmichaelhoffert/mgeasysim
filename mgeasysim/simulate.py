@@ -51,29 +51,30 @@ def simulate(simulation_data, N_READS, n_threads, acc2genbank, genome_lengths, g
         already_exists = 0
         # for each genome included in the current simulation
         for i, (index, row) in enumerate(simulation_data[simulation_data['simid'].eq(sim)].iterrows()):
-
+            
             # get n reads and fold coverage 
             n_reads = int(np.ceil(row['abun'] * N_READS))
-            fold_coverage = f'{(n_reads * 150 * 2) / genome_lengths.loc[row["index"]]:0.20f}'
-            logger.info(str(row['index']))
+
+            fold_coverage = f'{(n_reads * 150 * 2) / genome_lengths.loc[row["top_match_accession"]]:0.20f}'
+            logger.info(str(row["top_match_accession"]))
             logger.info('\t\n'.join([str(i), 'NREADS: ', str(n_reads), ' ABUN:', str(row['abun']), 'FOLD COV', str(fold_coverage)]))
             
             total_reads += n_reads
-            file = genome2file.loc[acc2genbank.loc[row['index']]]
+            file = genome2file.loc[acc2genbank.loc[row["top_match_accession"]]]
 
             # copy genome to genomes folder for default db
-            command = f'cp {file} {BASE_PATH}/sim{sim}/genomes/sylph_db/{row["index"]}_genomic.fna'
+            command = f'cp {file} {BASE_PATH}/sim{sim}/genomes/sylph_db/{row["top_match_accession"]}_genomic.fna'
             run_command(command, 
                         logger, 
                         verbose=verbose, 
-                        error_message=f'Copy of genome {row["index"]} to new db folder failed')
+                        error_message=f'Copy of genome {row["top_match_accession"]} to new db folder failed')
             # result = subprocess.run(command.split(' '), shell=False, capture_output=True)
             
             # simulate reads
-            outfile = f'{BASE_PATH}/sim{sim}/fqs/{row['index']}'
+            outfile = f'{BASE_PATH}/sim{sim}/fqs/{row["top_match_accession"]}'
             if not os.path.exists(f'{outfile}_R1.fq.gz'):
-                command1 = f'art_illumina -ss HS25 -i {file} -l 150 -f {fold_coverage} -d {row['index']} -m 300 -s 5 -o {outfile}_R -p'
-                command2 = f'gzip {outfile}_R*'
+                command1 = f'art_illumina -ss HS25 -i {file} -l 150 -f {fold_coverage} -d {row["top_match_accession"]} -m 300 -s 5 -o {outfile}_R -p'
+                command2 = f'gzip -f {outfile}_R*'
                 read_simulations.append(f'{command1} && {command2}')
                 logger.info(f'Added command: {command1} && {command2}')
             else:

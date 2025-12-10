@@ -75,28 +75,35 @@ def get_matching_gtdb(taxfile, logger, search_col='species', verbose=True):
 
 def download_genomes(genbanks, logger, verbose=True):
 
-    verboseprint(verbose, 'Writing genome list')
-    logger.info('Writing genome list')
-    with open(os.path.join(cf.OUTPUT, 'genbanklist.txt'), 'w') as handle:
-        handle.write('\n'.join(genbanks))
+    if not os.path.exists(os.path.join(cf.OUTPUT, 'genomes_dataset.zip')):
+        verboseprint(verbose, 'Writing genome list')
+        logger.info('Writing genome list')
+        with open(os.path.join(cf.OUTPUT, 'genbanklist.txt'), 'w') as handle:
+            handle.write('\n'.join(genbanks))
+        
+        verboseprint(verbose, 'Downloading')
+        command1 = [f'datasets download genome accession --inputfile', 
+                os.path.join(cf.OUTPUT, 'genbanklist.txt'),
+                    '--filename', os.path.join(cf.OUTPUT, 'genomes_dataset.zip')]
+        
+        command2 = ['unzip', '-q', '-o',
+                    os.path.join(cf.OUTPUT, 'genomes_dataset.zip'),
+                    '-d',
+                    os.path.join(cf.OUTPUT, '')]
+        
+        command1 = ' '.join(command1)
+        logger.info(command1)
+        run_command(command1, logger, verbose, 'Downloading NCBI dataset failed')
     
-    verboseprint(verbose, 'Downloading')
-    command1 = [f'datasets download genome accession --inputfile', 
-            os.path.join(cf.OUTPUT, 'genbanklist.txt'),
-                '--filename', os.path.join(cf.OUTPUT, 'genomes_dataset.zip')]
-    
-    command2 = ['unzip', '-q', '-o',
-                os.path.join(cf.OUTPUT, 'genomes_dataset.zip'),
-                '-d',
-                os.path.join(cf.OUTPUT, '')]
-    
-    command1 = ' '.join(command1)
-    logger.info(command1)
-    run_command(command1, logger, verbose, 'Downloading NCBI dataset failed')
-
-    command2 = ' '.join(command2)
-    logger.info(command2)
-    run_command(command2, logger, verbose, 'Unzipping NCBI dataset failed')
+        command2 = ' '.join(command2)
+        logger.info(command2)
+        run_command(command2, logger, verbose, 'Unzipping NCBI dataset failed')
+        return True
+        
+    else:
+        verboseprint(verbose, 'Skipping genome download...')
+        logger.info('Skipping genome download...')
+        return False
 
 
 
@@ -142,6 +149,7 @@ def add_mashdist(matches, logger, verbose=True):
         d = float(output.split()[2])
         matches.loc[index, 'alt_mashdist'] = 1 - d
 
+    
     return matches
 
 def distribution(num_bacteria, a = 0.05):
@@ -173,8 +181,10 @@ def generate_simulations(logger, matches, n_sims, n_species, power_a, n_strains)
     logger.info('Making simulations')
     for i in range(n_sims):
         # simulate data
-        abundances = generate_abundances(n_species, exponent=power_a)
-        simulation = pd.DataFrame(index=matches['top_match_accession'].sample(n_species, replace=False), 
+        n_valid_matches = len(matches['top_match_accession'].drop_duplicates())
+        print('Uniqueness of matches:', len(matches), n_valid_matches)
+        abundances = generate_abundances(np.min([n_valid_matches, n_species]), exponent=power_a)
+        simulation = pd.DataFrame(index=matches['top_match_accession'].drop_duplicates().sample(np.min([n_valid_matches, n_species]), replace=False), 
                                                                       data=abundances, 
                                                                       columns=['abun'])
         # column to indicate which strains have duplicates
@@ -185,30 +195,31 @@ def generate_simulations(logger, matches, n_sims, n_species, power_a, n_strains)
 
         # only get strains from GTDB genomes with more than 1 genome in the cluster 
         strains_possible = simulation[simulation['n_genomes'] > 1]
-        
-        # if there's only 1 thing with a genome in the cluster, only 1 strain is possible
-        alts = strains_possible.sample(np.min([n_strains, len(strains_possible)]), replace=False)
-        logger.info(f'Number of alternate straiins: {len(alts)}')
 
-        # make data
-        alt_data = pd.DataFrame(index=[matches[matches.top_match_accession.eq(i)]['top_match_alt'].values[0] for i in alts.index], 
-                                columns=['abun', 'strain_present'])
-        
-        # make each alternate species either 2x or 1/2 as abundant
-        
-        for j, (index, row) in enumerate(alt_data.iterrows()):
+        if n_strains > 0:
+            # if there's only 1 thing with a genome in the cluster, only 1 strain is possible
+            alts = strains_possible.sample(np.min([n_strains, len(strains_possible)]), replace=False)
+            logger.info(f'Number of alternate straiins: {len(alts)}')
+    
+            # make data
+            alt_data = pd.DataFrame(index=[matches[matches.top_match_accession.eq(i)]['top_match_alt'].values[0] for i in alts.index], 
+                                    columns=['abun', 'strain_present'])
             
-            # print(alternate)
-            alternate = index
-            original = alts.index[j]
-            val = simulation.loc[original, 'abun'] / np.random.choice([0.5, 2])
-            alt_data.loc[alternate, 'abun'] = val
-            alt_data.loc[alternate, 'strain_present'] = 2
-            simulation.loc[original, 'strain_present'] = 1
-            logger.info('Original: {original}, alt: {alt}, abun: {val}')
-
-        # add to whole data
-        simulation = pd.concat([simulation, alt_data])
+            # make each alternate species either 2x or 1/2 as abundant
+            
+            for j, (index, row) in enumerate(alt_data.iterrows()):
+                
+                # print(alternate)
+                alternate = index
+                original = alts.index[j]
+                val = simulation.loc[original, 'abun'] / np.random.choice([0.5, 2])
+                alt_data.loc[alternate, 'abun'] = val
+                alt_data.loc[alternate, 'strain_present'] = 2
+                simulation.loc[original, 'strain_present'] = 1
+                logger.info('Original: {original}, alt: {alt}, abun: {val}')
+    
+            # add to whole data
+            simulation = pd.concat([simulation, alt_data])
         simulation['simid'] = i
         simulation['abun'] = simulation['abun'] / simulation['abun'].sum()
         simulations.append(simulation.reset_index())
