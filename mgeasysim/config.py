@@ -70,8 +70,14 @@ class Config:
         with open(config_path, "w") as file:
             yaml.dump(self._config_data, file)
         
-    def get(self, section, option, default=None):
-        return self._config_data.get(section, {}).get(option, default)
+    def get(self, section, option):
+        if section not in self._config_data:
+            raise KeyError(f"Section '{section}' not found in configuration.")
+        
+        if option not in self._config_data[section]:
+            raise KeyError(f"Option '{option}' not found in section '{section}'.")
+    
+        return self._config_data[section][option]
     
     def set(self, section, option, value):
         # Update in-memory configuration

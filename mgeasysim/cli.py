@@ -19,7 +19,7 @@ def main():
     config_parser.add_argument("--gtdb", '-g', type=str, help="Location of GTDB database", 
                                required=True,
                                )
-    config_parser.add_argument("--config", '-c', type=str, help="Location of configuration",
+    config_parser.add_argument("--config_out", '-c', type=str, help="Location of configuration output",
                                required=True)
     config_parser.add_argument("--threads", '-@', type=int, help="Number of threads",
                                default=1, )
@@ -56,7 +56,7 @@ def main():
     simulate_parser.add_argument("--config", '-c', type=str, help="Location of configuration",
                                required=True)
     simulate_parser.add_argument('--output', '-o', required=True, type=str,
-                                  help='Where to write files')
+                                  help='Where to write files for simulation, with prefix')
     simulate_parser.add_argument('--use_comms', '-u', required=False, type=str,
                                  default = '1,2,3,4,5',
                                   help='Which simulations to use (1-indexed)')
@@ -67,10 +67,10 @@ def main():
     
     if args.command == 'config':
 
-        config = cf.load_configuration(os.path.abspath(args.config), write_new=True)
+        config = cf.load_configuration(os.path.abspath(args.config_out), write_new=True)
         
         config.set('database', 'gtdb_loc', os.path.abspath(args.gtdb))
-        config.set('locations', 'config', os.path.abspath(args.config))
+        config.set('locations', 'config', os.path.abspath(args.config_out))
         config.set('runtime', 'threads', args.threads)
         config.set('parameters', 'verbose', args.verbose)
 
@@ -148,6 +148,7 @@ def main():
         
         # load config and setup logging
         config = cf.load_configuration(os.path.abspath(args.config), write_new=False)
+        cf.preview_configuration(os.path.abspath(args.config))
 
         # load simdata
         simdata = pd.read_csv(config.get('locations', 'simulations_path'), sep='\t', index_col=0)
@@ -155,7 +156,8 @@ def main():
         simdata = simdata[simdata['simid'].isin([int(s)-1 for s in args.use_comms.split(',')])]
         print(f'Using communities: {simdata.simid.unique()}')
 
-        output_loc = config.get('locations', 'outputs')
+        output_loc = config.get('locations', 'community_outputs')
+        print()
         community.configure_output(output_loc)
         utils.configure_output(output_loc)
         if os.path.exists(os.path.join(output_loc, 'genome_lengths.pkl')):
@@ -178,8 +180,11 @@ def main():
         utils.configure_output(os.path.abspath(args.output))
         logger = utils.setup_logging_for_function('simulate')
         logger.info(f'Establishing base dir at {os.path.abspath(args.output)} - simulations')
-
+        
         simulate.configure_output(os.path.abspath(args.output))
+        config.set('locations', 
+                   'simulate_outputs', 
+                   os.path.abspath(args.output))
         
         # construct simulated communites
         simulate.simulate(simdata, 
