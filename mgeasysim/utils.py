@@ -16,6 +16,13 @@ from rapidfuzz import process, fuzz
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
+_GLOBAL_OUTPUT = None
+
+def configure_output(outloc):
+    global _GLOBAL_OUTPUT
+    _GLOBAL_OUTPUT = outloc
+    print(f'Module "utils" configured to output: {_GLOBAL_OUTPUT}')
+
 # Function to find top match from slist for each item in qlist
 def find_top_matches(qlist, slist):
     matches = []
@@ -28,7 +35,7 @@ def find_top_matches(qlist, slist):
 def get_genome2file():
     # save distribution of genome files
     genome2file = pd.Series()
-    genome_folders = glob.glob(os.path.join(cf.OUTPUT, 'ncbi_dataset/data/*/*_genomic.fna'))
+    genome_folders = glob.glob(os.path.join(_GLOBAL_OUTPUT, 'ncbi_dataset/data/*/*_genomic.fna'))
     if len(genome_folders) == 0:
         raise FileNotFoundError('No genomes found. Did the download fail?')
     
@@ -38,9 +45,9 @@ def get_genome2file():
 
     return genome2file
 
-def get_genome_lengths():
+def get_genome_lengths(gtdb_md):
     # get genome lengths
-    gtdb_md = pd.read_csv(cf.GTDB_MD, sep='\t', index_col='accession')
+    gtdb_md = pd.read_csv(gtdb_md, sep='\t', index_col='accession')
     acc2genbank = gtdb_md['ncbi_genbank_assembly_accession']
     
     genome_lengths = pd.Series()
@@ -78,7 +85,7 @@ class LastLogHandler(logging.Handler):
 
 def setup_logging_for_function(func_name):
     """Configure logging for a specific function based on its name."""
-    log_filename = os.path.join(cf.OUTPUT, f"{func_name}.log")
+    log_filename = os.path.join(_GLOBAL_OUTPUT, f"{func_name}.log")
     
     # Create a logger for the specific function
     logger = logging.getLogger(func_name)
